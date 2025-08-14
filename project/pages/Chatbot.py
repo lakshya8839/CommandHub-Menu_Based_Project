@@ -1,11 +1,19 @@
 import streamlit as st
 import requests
+import os
+from dotenv import load_dotenv
 
-#  Gemini API Key
-API_KEY = "AIzaSyD3sew6USeifzQGiIYp8OOwFUjPwUb9sQ8"  
+# Load environment variables from .env
+load_dotenv()
+
+# Get API key from environment
+API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not API_KEY:
+    st.error(" GEMINI_API_KEY not found in environment variables. Please set it in your .env file.")
+    st.stop()
 
 # Gemini Client
-
 class GeminiClient:
     def __init__(self, api_key):
         self.api_key = api_key
@@ -22,13 +30,11 @@ class GeminiClient:
                 self.parent = parent
 
             def create(self, model, messages):
-                # Convert messages to Gemini API format
                 contents = []
                 for m in messages:
                     role = "user" if m["role"] != "assistant" else "model"
                     contents.append({"role": role, "parts": [{"text": m["content"]}]})
 
-                # Make API request
                 r = requests.post(
                     f"{self.parent.url}/models/{model}:generateContent?key={self.parent.api_key}",
                     json={
@@ -37,20 +43,15 @@ class GeminiClient:
                     }
                 )
 
-                # If HTTP error → raise
                 r.raise_for_status()
                 data = r.json()
-
-                # Show raw API response for debugging
                 st.write("🔍 Gemini API Raw Response:", data)
 
-                # Extract text safely
                 try:
                     text = data["candidates"][0]["content"]["parts"][0]["text"]
                 except (KeyError, IndexError):
                     text = data.get("promptFeedback", {}).get("blockReason", "⚠️ No valid response.")
 
-                # Wrap in OpenAI-like structure
                 class Msg: content = text
                 class Choice: message = Msg()
                 class Response: choices = [Choice()]
@@ -62,7 +63,6 @@ def suggest(domain, query):
         {"role": "user", "content": f"You are a domain expert in {domain}. Keep advice crisp, practical, and in bullet points.\n\n{query}"}
     ]
     try:
-        # Try latest model first
         response = client.chat.completions.create("gemini-2.5-flash", messages)
     except requests.exceptions.HTTPError:
         st.warning("⚠️ gemini-2.5-flash failed, trying gemini-1.5-flash...")
@@ -72,7 +72,7 @@ def suggest(domain, query):
 
 
 st.set_page_config(page_title="Gemini Expert Advisor", layout="centered")
-st.title(" Gemini Expert Advisor")
+st.title("Gemini Expert Advisor")
 
 # Initialize Gemini client
 client = GeminiClient(api_key=API_KEY)
